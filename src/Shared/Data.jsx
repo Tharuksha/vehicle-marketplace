@@ -153,8 +153,4 @@ const Category=[
 
 ]
 
-export default{
-CarBrands,
-Pricing,
-Category
-}
+export default{CarBrands,Pricing,Category}
