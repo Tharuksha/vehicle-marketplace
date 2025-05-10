@@ -130,27 +130,25 @@ const Category=[
     icon:'https://cdn-icons-png.flaticon.com/128/5035/5035202.png'
 },
 {
-    id:5,
+    id:6,
     name:'Hybrid',
     icon:'https://cdn-icons-png.flaticon.com/128/3202/3202003.png'
 },
 {
-    id:5,
+    id:7,
     name:'Coupe',
     icon:'https://cdn-icons-png.flaticon.com/128/4391/4391630.png'
 },
 {
-    id:5,
+    id:8,
     name:'Van',
     icon:'https://cdn-icons-png.flaticon.com/128/1433/1433678.png'
 },
 {
-    id:5,
+    id:9,
     name:'Truck',
     icon:'https://cdn-icons-png.flaticon.com/128/5814/5814855.png'
-},
-
-
+}
 ]
 
 export default{CarBrands,Pricing,Category}

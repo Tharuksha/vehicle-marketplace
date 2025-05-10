@@ -7,7 +7,7 @@ function Hero() {
       <h2 className='text-lg font-medium'>The best place to buy and sell cars</h2>
       <h2 className='text-[60px] font-bold'>Find your dream car</h2>
       <Search/>
-      <img src='/tesla.png' alt='tesla'  />
+      <img src='/bmw.png' alt='bmw' className='max-w-5xl w-full object-contain mx-auto -mt-40' />
     </div>
   )
 }

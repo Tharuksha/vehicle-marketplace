@@ -18,35 +18,34 @@ function Search() {
           <SelectValue placeholder="Car" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="light">New</SelectItem>
-          <SelectItem value="dark">Old</SelectItem>
-
+          <SelectItem key="new" value="light">New</SelectItem>
+          <SelectItem key="old" value="dark">Old</SelectItem>
         </SelectContent>
       </Select>
       <Separator orientation="vertical" className="hidden md:block" />
       <Select>
-      <SelectTrigger className="outline-none md:border-none w-full shadow-none text-lg">
+        <SelectTrigger className="outline-none md:border-none w-full shadow-none text-lg">
           <SelectValue placeholder="Brand" />
         </SelectTrigger>
         <SelectContent>
-            {Data.CarBrands.map((brand,index)=>(
-                <SelectItem value={brand.name}>{brand.name}</SelectItem>
-            ))}
+          {Data.CarBrands.map((brand) => (
+            <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <Separator orientation="vertical" className="hidden md:block" />
       <Select>
-      <SelectTrigger className="outline-none md:border-none w-full shadow-none text-lg">
+        <SelectTrigger className="outline-none md:border-none w-full shadow-none text-lg">
           <SelectValue placeholder="Price" />
         </SelectTrigger>
         <SelectContent>
-        {Data.Pricing.map((price,index)=>(
-                <SelectItem value={price.amount}>{price.amount}</SelectItem>
-            ))}
+          {Data.Pricing.map((price) => (
+            <SelectItem key={price.id} value={price.amount}>{price.amount}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <div>
-      <CiSearch className="text-[50px] bg-primary rounded-full p-3 text-white hover:scale-105 transition-all cursor-pointer " />
+        <CiSearch className="text-[50px] bg-primary rounded-full p-3 text-white hover:scale-105 transition-all cursor-pointer " />
       </div>
     </div>
   );
