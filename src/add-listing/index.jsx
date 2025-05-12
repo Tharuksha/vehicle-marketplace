@@ -13,13 +13,15 @@ import { CarListing, CarImages } from "../../configs/schema";
 import IconField from "./components/IconField";
 import UploadImages from "./components/UploadImages";
 import { useNavigate } from "react-router-dom";
-
+import { useUser } from "@clerk/clerk-react";
+import moment from "moment";
 function AddListing() {
   const [formData, setFormData] = useState({});
   const [featuresData, setFeaturesData] = useState([]);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const uploadImagesRef = useRef(null);
+  const {user} = useUser();
   const navigate = useNavigate();
 
   const handleInputChange = (name, value) => {
@@ -46,6 +48,15 @@ function AddListing() {
     setIsSubmitting(true);
 
     try {
+      // Check if user is authenticated and has an email
+      const userEmail = user?.primaryEmailAddress?.emailAddress;
+      if (!userEmail) {
+        console.error("User email not available. Please ensure you're logged in.");
+        alert("Please log in to submit a listing.");
+        setIsSubmitting(false);
+        return;
+      }
+
       let imagesToSave = [];
       
       // First upload any pending images
@@ -71,7 +82,9 @@ function AddListing() {
       // Then insert the car listing
       const carListingResult = await db.insert(CarListing).values({
         ...formData,
-        features: featuresData
+        features: featuresData,
+        createdBy: userEmail,
+        postedOn: moment().format("YYYY-MM-DD")
       }).returning();
 
       // Get the inserted car listing ID
