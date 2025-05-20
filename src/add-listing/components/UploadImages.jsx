@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from "react";
+import React, { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -8,11 +8,83 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 const BUCKET_NAME = 'vehicles';
 
-const UploadImages = forwardRef(({ onImagesUploaded }, ref) => {
+const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+
+  // Initial loading effect - runs only once on mount with initial images
+  useEffect(() => {
+    const loadInitialImages = () => {
+      if (initialImages && initialImages.length > 0) {
+        console.log("Initially loading images on mount:", initialImages);
+        
+        const formattedImages = initialImages.map(img => ({
+          previewUrl: img.imageUrl,
+          cloudUrl: img.imageUrl,
+          fileId: img.storageId,
+          uploaded: true
+        }));
+        
+        setSelectedImages(formattedImages);
+        
+        // Notify parent component about initial images
+        const imagesForDb = formattedImages.map(img => ({
+          imageUrl: img.cloudUrl,
+          storageId: img.fileId
+        }));
+        
+        onImagesUploaded(imagesForDb);
+      }
+    };
+    
+    loadInitialImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array means this runs once on mount
+
+  // Track changes to initialImages after initial mount
+  useEffect(() => {
+    // Skip empty initialImages
+    if (!initialImages || initialImages.length === 0) return;
+    
+    // Compare current initialImages with selectedImages to avoid duplicates
+    const hasChanges = initialImages.some(initialImg => 
+      !selectedImages.some(selectedImg => 
+        selectedImg.fileId === initialImg.storageId && 
+        selectedImg.cloudUrl === initialImg.imageUrl
+      )
+    );
+    
+    // Skip if no changes detected
+    if (!hasChanges) return;
+    
+    console.log("initialImages changed, updating...");
+    
+    // Create a map of existing images by fileId to avoid duplicates
+    const existingImagesMap = new Map(
+      selectedImages
+        .filter(img => img.uploaded && img.fileId)
+        .map(img => [img.fileId, img])
+    );
+    
+    // Process new images, avoiding duplicates
+    const newImages = initialImages.filter(img => 
+      !existingImagesMap.has(img.storageId)
+    ).map(img => ({
+      previewUrl: img.imageUrl,
+      cloudUrl: img.imageUrl,
+      fileId: img.storageId,
+      uploaded: true
+    }));
+    
+    // Only update if we have new images
+    if (newImages.length > 0) {
+      console.log(`Adding ${newImages.length} new images from props`);
+      const updatedImages = [...selectedImages, ...newImages];
+      setSelectedImages(updatedImages);
+    }
+  }, [initialImages]);  // Only depend on initialImages
 
   useImperativeHandle(ref, () => ({
     uploadToSupabase,

@@ -1,5 +1,5 @@
 import Header from "@/components/Header";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import carDetails from "@/Shared/carDetails.json";
 import InputField from "./components/InputField";
 import DropdownField from "./components/DropdownField";
@@ -9,20 +9,54 @@ import features from "@/Shared/features.json";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { db } from "../../configs";
+import { eq } from "drizzle-orm";
 import { CarListing, CarImages } from "../../configs/schema";
 import IconField from "./components/IconField";
 import UploadImages from "./components/UploadImages";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUser } from "@clerk/clerk-react";
 import moment from "moment";
+import Service from "@/Shared/Service";
 function AddListing() {
   const [formData, setFormData] = useState({});
   const [featuresData, setFeaturesData] = useState([]);
   const [uploadedImages, setUploadedImages] = useState([]);
+  const [searchParams] = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [carInfo, setCarInfo] = useState({});
   const uploadImagesRef = useRef(null);
   const {user} = useUser();
+  const mode = searchParams.get("mode");
+  const recordId = searchParams.get("id");
+
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if(mode=='edit')
+    {
+      GetListingDetail();
+    }
+  },[]);
+
+  const GetListingDetail=async()=>{
+    const result=await db.select().from(CarListing).innerJoin(CarImages, eq(CarListing.id, CarImages.carListingId)).where(eq(CarListing.id, recordId));
+
+    const resp=Service.FormatResult(result);
+    setCarInfo(resp[0]);
+    
+    // Populate form data for editing
+    if (resp[0]) {
+      const { features, images, ...carData } = resp[0];
+      setFormData(carData);
+      setFeaturesData(features || {});
+      
+      // Extract initial images data from the fetched listing
+      if (images && images.length > 0) {
+        console.log("Setting initial images:", images);
+        setUploadedImages(images);
+      }
+    }
+  }
 
   const handleInputChange = (name, value) => {
     setFormData((prevData) => ({
@@ -79,24 +113,49 @@ function AddListing() {
         }
       }
 
-      // Then insert the car listing
-      const carListingResult = await db.insert(CarListing).values({
-        ...formData,
-        features: featuresData,
-        createdBy: userEmail,
-        postedOn: moment().format("YYYY-MM-DD")
-      }).returning();
+      let carListingId;
 
-      // Get the inserted car listing ID
-      const carListingId = carListingResult?.[0]?.id;
+      if (mode === 'edit' && recordId) {
+        // Update existing listing
+        const updateResult = await db.update(CarListing)
+          .set({
+            ...formData,
+            features: featuresData,
+            updatedBy: userEmail,
+            updatedOn: moment().format("YYYY-MM-DD")
+          })
+          .where(eq(CarListing.id, recordId))
+          .returning();
+        
+        carListingId = recordId;
+        console.log("Car listing updated with ID:", carListingId);
+        
+        // Delete existing images if we have new ones to save
+        if (imagesToSave && imagesToSave.length > 0) {
+          try {
+            await db.delete(CarImages).where(eq(CarImages.carListingId, carListingId));
+            console.log("Deleted existing images for car listing ID:", carListingId);
+          } catch (deleteError) {
+            console.error("Error deleting existing images:", deleteError);
+          }
+        }
+      } else {
+        // Insert new car listing
+        const carListingResult = await db.insert(CarListing).values({
+          ...formData,
+          features: featuresData,
+          createdBy: userEmail,
+          postedOn: moment().format("YYYY-MM-DD")
+        }).returning();
+
+        // Get the inserted car listing ID
+        carListingId = carListingResult?.[0]?.id;
+      }
       
       if (!carListingId) {
         console.error("Failed to retrieve car listing ID");
         return;
       }
-
-      console.log("Car listing created with ID:", carListingId);
-      console.log("Images to save:", imagesToSave);
 
       // Insert all uploaded images
       if (imagesToSave && imagesToSave.length > 0) {
@@ -172,16 +231,19 @@ function AddListing() {
                     <InputField
                       item={item}
                       handleInputChange={handleInputChange}
+                      carInfo={carInfo}
                     />
                   ) : item.fieldType == "dropdown" ? (
                     <DropdownField
                       item={item}
                       handleInputChange={handleInputChange}
+                      carInfo={carInfo}
                     />
                   ) : item.fieldType == "textarea" ? (
                     <TextAreaField
                       item={item}
                       handleInputChange={handleInputChange}
+                      carInfo={carInfo}
                     />
                   ) : null}
                 </div>
@@ -199,6 +261,7 @@ function AddListing() {
                     onCheckedChange={(value) =>
                       handleFeatureChange(item.name, value)
                     }
+                    checked={featuresData?.[item.name]}
                   />
                   <h2>{item.label}</h2>
                 </div>
@@ -209,7 +272,8 @@ function AddListing() {
           <Separator className="my-10" />
           <UploadImages 
             ref={uploadImagesRef}
-            onImagesUploaded={handleImagesUploaded} 
+            onImagesUploaded={handleImagesUploaded}
+            initialImages={mode === 'edit' && carInfo?.images?.length > 0 ? carInfo.images : []}  
           />
           <div className="mt-10 flex justify-end">
             <Button 
