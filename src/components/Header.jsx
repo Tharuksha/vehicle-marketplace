@@ -23,7 +23,7 @@ function Header() {
     </div>
     :
     <SignInButton mode="modal">
-      <Button>Submit Listing</Button>
+      <Button>Get Started</Button>
     </SignInButton>
       }
     </div>

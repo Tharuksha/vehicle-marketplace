@@ -8,24 +8,21 @@ import {
   } from "@/components/ui/select"
   
 
-function DropdownField({item,handleInputChange,carInfo}) {
+function DropdownField({item, handleInputChange, carInfo, error}) {
   useEffect(() => {
-    // Set default value for required fields
-    if (item.required && item.options && item.options.length > 0 && !carInfo[item.name]) {
+
+    if (item.required && item.options && item.options.length > 0 && !carInfo?.[item.name]) {
       handleInputChange(item.name, item.options[0]);
     }
   }, []);
 
-  // Ensure value is always defined to avoid controlled/uncontrolled warning
-  const currentValue = carInfo[item.name] || "";
-
   return (
-    <div>
+    <div className="space-y-1">
       <Select 
         onValueChange={(value)=>handleInputChange(item.name,value)}
-        value={currentValue}
+        value={carInfo?.[item.name] || ""}
         required={item.required}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger className={`w-full ${error ? "border-red-500" : ""}`}>
           <SelectValue placeholder={item.placeholder || "Select an option"} />
         </SelectTrigger>
         <SelectContent>
@@ -34,6 +31,9 @@ function DropdownField({item,handleInputChange,carInfo}) {
           ))}
         </SelectContent>
       </Select>
+      {error && (
+        <p className="text-red-500 text-xs">{error}</p>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
-import React, { useState, forwardRef, useImperativeHandle, useEffect } from "react";
+import React, { useState, forwardRef, useImperativeHandle, useEffect, useRef } from "react";
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import { useToast } from "@/hooks/use-toast";
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -8,14 +9,19 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 const BUCKET_NAME = 'vehicles';
 
-const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) => {
+const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [], error }, ref) => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const initialLoadComplete = useRef(false);
+  const prevInitialImagesRef = useRef([]);
+  const { toast } = useToast();
 
-  // Initial loading effect - runs only once on mount with initial images
+
   useEffect(() => {
+    if (initialLoadComplete.current) return;
+    
     const loadInitialImages = () => {
       if (initialImages && initialImages.length > 0) {
         console.log("Initially loading images on mount:", initialImages);
@@ -24,123 +30,178 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
           previewUrl: img.imageUrl,
           cloudUrl: img.imageUrl,
           fileId: img.storageId,
-          uploaded: true
+          uploaded: true,
+          id: img.storageId || uuidv4(),
+          signature: img.storageId
         }));
         
         setSelectedImages(formattedImages);
-        
-        // Notify parent component about initial images
-        const imagesForDb = formattedImages.map(img => ({
-          imageUrl: img.cloudUrl,
-          storageId: img.fileId
-        }));
-        
-        onImagesUploaded(imagesForDb);
+        prevInitialImagesRef.current = [...initialImages];
+        initialLoadComplete.current = true;
       }
     };
     
     loadInitialImages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array means this runs once on mount
+  }, [initialImages]);
 
-  // Track changes to initialImages after initial mount
+
   useEffect(() => {
-    // Skip empty initialImages
-    if (!initialImages || initialImages.length === 0) return;
+    if (!initialLoadComplete.current || !initialImages || initialImages.length === 0) return;
     
-    // Compare current initialImages with selectedImages to avoid duplicates
-    const hasChanges = initialImages.some(initialImg => 
-      !selectedImages.some(selectedImg => 
-        selectedImg.fileId === initialImg.storageId && 
-        selectedImg.cloudUrl === initialImg.imageUrl
-      )
-    );
+    const areImagesEqual = (prevImages, newImages) => {
+      if (prevImages.length !== newImages.length) return false;
+      
+      return prevImages.every((prevImg, index) => {
+        const newImg = newImages[index];
+        return prevImg.imageUrl === newImg.imageUrl && 
+               prevImg.storageId === newImg.storageId;
+      });
+    };
     
-    // Skip if no changes detected
-    if (!hasChanges) return;
+    if (areImagesEqual(prevInitialImagesRef.current, initialImages)) return;
     
     console.log("initialImages changed, updating...");
+    prevInitialImagesRef.current = [...initialImages];
     
-    // Create a map of existing images by fileId to avoid duplicates
+ 
     const existingImagesMap = new Map(
-      selectedImages
-        .filter(img => img.uploaded && img.fileId)
-        .map(img => [img.fileId, img])
+      selectedImages.map(img => [img.fileId || img.signature, img])
     );
     
-    // Process new images, avoiding duplicates
+    
     const newImages = initialImages.filter(img => 
       !existingImagesMap.has(img.storageId)
     ).map(img => ({
       previewUrl: img.imageUrl,
       cloudUrl: img.imageUrl,
       fileId: img.storageId,
-      uploaded: true
+      uploaded: true,
+      id: img.storageId || uuidv4(),
+      signature: img.storageId
     }));
     
-    // Only update if we have new images
     if (newImages.length > 0) {
-      console.log(`Adding ${newImages.length} new images from props`);
-      const updatedImages = [...selectedImages, ...newImages];
-      setSelectedImages(updatedImages);
+      setSelectedImages(prevImages => [...prevImages, ...newImages]);
     }
-  }, [initialImages]);  // Only depend on initialImages
+  }, [initialImages]);
 
   useImperativeHandle(ref, () => ({
     uploadToSupabase,
+    hasSelectedImages: () => selectedImages.length > 0,
     resetImages: () => {
-      // Clean up any object URLs before resetting
+      
       selectedImages.forEach(image => {
         if (image.previewUrl) {
           URL.revokeObjectURL(image.previewUrl);
         }
       });
       setSelectedImages([]);
-      setError(null);
+      setUploadError(null);
       setDeleteError(null);
+      initialLoadComplete.current = false;
     }
   }));
 
-  const handleImageSelect = (e) => {
+  const handleImageSelect = async (e) => {
     const files = Array.from(e.target.files);
+
     
-    // Create preview URLs for selected files
-    const newImages = files.map(file => ({
-      file: file,
-      previewUrl: URL.createObjectURL(file),
-      uploaded: false
-    }));
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'));
+    if (invalidFiles.length > 0) {
+      setUploadError(`${invalidFiles.length} file(s) were not images and were rejected.`);
+      return;
+    }
+
+    
+    const existingSignatures = new Map(
+      selectedImages.map(img => [img.signature, true])
+    );
+
+    
+    const newImages = await Promise.all(
+      files
+        .filter(file => {
+          const fileSignature = `${file.name}-${file.size}`;
+          return !existingSignatures.has(fileSignature);
+        })
+        .map(async (file) => {
+          const uniqueId = uuidv4();
+          const previewUrl = URL.createObjectURL(file);
+          
+          
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${uniqueId}.${fileExt}`;
+          const filePath = `car-images/${fileName}`;
+
+          try {
+            const { data, error } = await supabase.storage
+              .from(BUCKET_NAME)
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+              });
+
+            if (error) throw error;
+
+            const { data: urlData } = supabase.storage
+              .from(BUCKET_NAME)
+              .getPublicUrl(filePath);
+
+            return {
+              file,
+              previewUrl,
+              cloudUrl: urlData.publicUrl,
+              fileId: filePath,
+              uploaded: true,
+              id: uniqueId,
+              signature: `${file.name}-${file.size}`,
+            };
+          } catch (error) {
+            console.error("Error uploading image:", error);
+            return {
+              file,
+              previewUrl,
+              uploaded: false,
+              id: uniqueId,
+              signature: `${file.name}-${file.size}`,
+            };
+          }
+        })
+    );
+
+    if (newImages.length === 0) {
+      setUploadError("No new unique images were selected.");
+      return;
+    }
 
     const updatedImages = [...selectedImages, ...newImages];
     setSelectedImages(updatedImages);
+    setUploadError(null);
+
     
-    // Notify parent component with any currently uploaded images
-    const currentlyUploadedImages = selectedImages.filter(
-      img => img.uploaded && img.cloudUrl && img.fileId
-    );
-    
-    if (currentlyUploadedImages.length > 0) {
-      const imagesForDb = currentlyUploadedImages.map(img => ({
+    const allUploadedImages = updatedImages
+      .filter(img => img.uploaded && img.cloudUrl && img.fileId)
+      .map(img => ({
         imageUrl: img.cloudUrl,
         storageId: img.fileId
       }));
-      
-      console.log("Currently uploaded images:", imagesForDb);
-      onImagesUploaded(imagesForDb);
+
+    if (allUploadedImages.length > 0) {
+      onImagesUploaded(allUploadedImages);
     }
-    
-    e.target.value = ''; // Reset input
+
+    e.target.value = '';
   };
 
   const uploadToSupabase = async () => {
     setUploading(true);
-    setError(null);
+    setUploadError(null);
     
     try {
       const unuploadedImages = selectedImages.filter(img => !img.uploaded);
       console.log("Uploading images to storage:", unuploadedImages.length);
       
-      // Prepare array to collect all uploaded images (both new and existing)
+      
       let allUploadedImages = selectedImages.filter(
         img => img.uploaded && img.cloudUrl && img.fileId
       );
@@ -150,7 +211,7 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
       if (unuploadedImages.length === 0) {
         console.log("No new images to upload");
         
-        // Format the data for the database
+        
         const imagesForDb = allUploadedImages.map(img => ({
           imageUrl: img.cloudUrl,
           storageId: img.fileId
@@ -158,6 +219,11 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
         
         console.log("Existing uploaded images:", imagesForDb);
         onImagesUploaded(imagesForDb);
+        
+        toast({
+          title: "Images uploaded",
+          description: `Successfully uploaded ${imagesForDb.length} image${imagesForDb.length > 1 ? 's' : ''}.`,
+        });
         
         return { 
           success: true, 
@@ -172,7 +238,7 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
 
         console.log("Uploading image:", fileName);
 
-        // Upload to Supabase Storage
+        
         const { data, error } = await supabase.storage
           .from(BUCKET_NAME)
           .upload(filePath, image.file, {
@@ -185,7 +251,7 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
           throw error;
         }
 
-        // Get public URL
+        
         const { data: urlData } = supabase.storage
           .from(BUCKET_NAME)
           .getPublicUrl(filePath);
@@ -199,17 +265,18 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
           ...image,
           cloudUrl: urlData.publicUrl,
           fileId: filePath,
-          uploaded: true
+          uploaded: true,
+          signature: filePath 
         };
       });
 
       const newlyUploadedImages = await Promise.all(uploadPromises);
       console.log("All images uploaded to storage:", newlyUploadedImages);
       
-      // Update state with uploaded images
+      
       const updatedImages = [...selectedImages];
       newlyUploadedImages.forEach(uploadedImg => {
-        const index = updatedImages.findIndex(img => img.previewUrl === uploadedImg.previewUrl);
+        const index = updatedImages.findIndex(img => img.id === uploadedImg.id);
         if (index !== -1) {
           updatedImages[index] = uploadedImg;
         } else {
@@ -219,12 +286,12 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
       
       setSelectedImages(updatedImages);
 
-      // Now collect ALL uploaded images for the database (both previous and new)
+      
       allUploadedImages = updatedImages.filter(
         img => img.uploaded && img.cloudUrl && img.fileId
       );
       
-      // Format the data for the database
+      
       const imagesForDb = allUploadedImages.map(img => ({
         imageUrl: img.cloudUrl,
         storageId: img.fileId
@@ -233,7 +300,7 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
       console.log("Total uploaded images:", allUploadedImages.length);
       console.log("Sending image data to parent:", imagesForDb);
       
-      // This should never be empty if we've just uploaded images
+      
       if (imagesForDb.length === 0) {
         console.error("ERROR: No images to send to parent even though we just uploaded some!");
         return { success: false, images: [] };
@@ -241,13 +308,23 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
       
       onImagesUploaded(imagesForDb);
 
+      toast({
+        title: "Images uploaded",
+        description: `Successfully uploaded ${imagesForDb.length} image${imagesForDb.length > 1 ? 's' : ''}.`,
+      });
+
       return { 
         success: true, 
         images: imagesForDb 
       };
     } catch (error) {
       console.error("Error uploading images:", error);
-      setError("Failed to upload images. Please try again.");
+      setUploadError("Failed to upload images. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: "Failed to upload images. Please try again.",
+      });
       return { success: false, images: [] };
     } finally {
       setUploading(false);
@@ -282,31 +359,50 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
       const updatedImages = selectedImages.filter((_, i) => i !== index);
       setSelectedImages(updatedImages);
       
-      // Only notify parent of remaining uploaded images with correct structure for DB
-      const remainingUploadedImages = updatedImages.filter(
+      // Collect uploaded images
+      const uploadedImgs = updatedImages.filter(
         img => img.uploaded && img.cloudUrl && img.fileId
-      );
-      
-      const imagesForDb = remainingUploadedImages.map(img => ({
+      ).map(img => ({
         imageUrl: img.cloudUrl,
         storageId: img.fileId
       }));
+      
+      // Collect pending images
+      const pendingImgs = updatedImages.filter(
+        img => !img.uploaded
+      ).map(img => ({
+        imageUrl: img.previewUrl,
+        storageId: img.id || `pending-${uuidv4()}`,
+        isPending: true
+      }));
+      
+      // Combine both types
+      const allImages = [...uploadedImgs, ...pendingImgs];
 
-      console.log("Remaining uploaded images count:", remainingUploadedImages.length);
-      console.log("Updating parent with remaining images:", imagesForDb);
-      onImagesUploaded(imagesForDb);
+      console.log("Remaining images (uploaded + pending):", allImages.length);
+      onImagesUploaded(allImages);
+
+      toast({
+        title: "Image deleted",
+        description: "Image has been successfully removed.",
+      });
     } catch (error) {
       console.error("Error removing image:", error);
       setDeleteError("An unexpected error occurred while deleting the image.");
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: "Failed to delete image. Please try again.",
+      });
     }
   };
 
   return (
     <div>
       <h2 className="font-medium text-xl mb-6">Car Images</h2>
-      {error && (
+      {uploadError && (
         <div className="mb-4 p-3 bg-red-100 text-red-800 rounded border border-red-300">
-          {error}
+          {uploadError}
         </div>
       )}
       {deleteError && (
@@ -314,9 +410,14 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
           {deleteError}
         </div>
       )}
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 text-red-800 rounded border border-red-300">
+          {error}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {selectedImages.map((image, index) => (
-          <div key={image.previewUrl} className="relative group">
+          <div key={`image-${index}-${image.fileId || image.previewUrl}`} className="relative group">
             <img
               src={image.previewUrl}
               alt={`Preview ${index + 1}`}
@@ -364,7 +465,7 @@ const UploadImages = forwardRef(({ onImagesUploaded, initialImages = [] }, ref) 
         
         <div className="relative">
           <label htmlFor="upload-images" className="block">
-            <div className='border rounded-xl border-dotted border-primary bg-blue-100 p-10 cursor-pointer hover:shadow-md h-40 flex items-center justify-center'>
+            <div className={`border rounded-xl border-dotted border-primary bg-blue-100 p-10 cursor-pointer hover:shadow-md h-40 flex items-center justify-center ${error ? 'border-red-500 border-2' : ''}`}>
               <h2 className='text-lg text-center text-primary'>
                 {uploading ? 'Uploading...' : '+ Add Images'}
               </h2>
