@@ -103,17 +103,17 @@ function MyListing() {
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
           </div>
         ) : carList.length > 0 ? (
-          carList.map((car) => (
-            <div key={car.id} className="border rounded-lg overflow-hidden shadow-md bg-white relative flex flex-col h-full">
-              {car.condition === "New" && (
+          carList.map((item) => (
+            <div key={item.id} className="border rounded-lg overflow-hidden shadow-md bg-white relative flex flex-col h-full">
+              {item.condition === "New" && (
                 <div className="absolute top-2 left-2 bg-green-500 text-white px-3 py-1 text-xs font-medium rounded-full z-10">
                   New
                 </div>
               )}
               <div className="relative w-full h-48 overflow-hidden">
                 <img 
-                  src={getCarImageUrl(car)}
-                  alt={car.make + ' ' + car.model} 
+                  src={getCarImageUrl(item)}
+                  alt={item.make + ' ' + item.model} 
                   className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                   onError={(e) => {
                     console.log("Image failed to load:", e.target.src);
@@ -122,33 +122,33 @@ function MyListing() {
                 />
               </div>
               <div className="p-4 flex-grow flex flex-col">
-                <h3 className="font-bold text-xl border-b pb-2 mb-3">{car.make} {car.model}</h3>
+                <h3 className="font-bold text-xl border-b pb-2 mb-3">{item.make} {item.model}</h3>
                 
                 <div className="grid grid-cols-3 gap-2 text-center mb-4">
                   <div className="flex flex-col items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <p className="font-medium">{car.mileage} Miles</p>
+                    <p className="font-medium">{item.mileage} Miles</p>
                   </div>
                   <div className="flex flex-col items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
                     </svg>
-                    <p className="font-medium">{car.fuelType}</p>
+                    <p className="font-medium">{item.fuelType}</p>
                   </div>
                   <div className="flex flex-col items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                     </svg>
-                    <p className="font-medium">{car.transmission}</p>
+                    <p className="font-medium">{item.transmission}</p>
                   </div>
                 </div>
                 
                 <div className="mt-auto">
                   <div className="flex items-center justify-between border-t pt-4">
-                    <span className="text-2xl font-bold">${car.sellingPrice}</span>
-                    <Link to={`/car-details/${car.id}`} className="text-blue-600 flex items-center hover:underline">
+                    <span className="text-2xl font-bold">${item.sellingPrice}</span>
+                    <Link to={`/car-details/${item.id}`} className="text-blue-600 flex items-center hover:underline">
                       View Details 
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -157,13 +157,13 @@ function MyListing() {
                   </div>
                   
                   <div className="flex justify-between mt-3 pt-3 border-t">
-                    <Link to={`/edit-listing/${car.id}`} className="text-blue-600 flex items-center hover:underline">
+                    <Link to={'/add-listing?mode=edit&id='+item?.id} className="text-blue-600 flex items-center hover:underline">
                       Edit 
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </Link>
-                    <button onClick={() => handleDelete(car.id)} className="text-red-600 flex items-center hover:underline">
+                    <button onClick={() => handleDelete(item.id)} className="text-red-600 flex items-center hover:underline">
                       Delete 
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
