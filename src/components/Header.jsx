@@ -1,5 +1,5 @@
 import React from 'react'
-import {useUser,UserButton} from '@clerk/clerk-react';
+import {useUser, UserButton, SignInButton} from '@clerk/clerk-react';
 import {Button} from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 function Header() {
@@ -22,9 +22,9 @@ function Header() {
         </Link>
     </div>
     :
-    <Link to="/sign-in">
-    <Button>Submit Listing</Button>
-    </Link>
+    <SignInButton mode="modal">
+      <Button>Submit Listing</Button>
+    </SignInButton>
       }
     </div>
   )
