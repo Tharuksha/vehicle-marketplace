@@ -61,10 +61,7 @@ function MyListing() {
         console.log("First car images:", resp[0].images);
       }
       setCarList(resp);
-      toast({
-        title: "Listings loaded",
-        description: "Your car listings have been successfully loaded.",
-      });
+     
     } catch (error) {
       console.error("Error fetching listings:", error);
       toast({
