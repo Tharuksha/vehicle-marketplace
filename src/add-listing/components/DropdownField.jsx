@@ -8,22 +8,25 @@ import {
   } from "@/components/ui/select"
   
 
-function DropdownField({item,handleInputChange}) {
+function DropdownField({item,handleInputChange,carInfo}) {
   useEffect(() => {
     // Set default value for required fields
-    if (item.required && item.options && item.options.length > 0) {
+    if (item.required && item.options && item.options.length > 0 && !carInfo[item.name]) {
       handleInputChange(item.name, item.options[0]);
     }
   }, []);
+
+  // Ensure value is always defined to avoid controlled/uncontrolled warning
+  const currentValue = carInfo[item.name] || "";
 
   return (
     <div>
       <Select 
         onValueChange={(value)=>handleInputChange(item.name,value)}
-        defaultValue={item.required ? item.options[0] : undefined}
+        value={currentValue}
         required={item.required}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder={item.label} />
+          <SelectValue placeholder={item.placeholder || "Select an option"} />
         </SelectTrigger>
         <SelectContent>
           {item?.options?.map((option,index)=>(
